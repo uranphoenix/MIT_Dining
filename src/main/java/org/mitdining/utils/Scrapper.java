@@ -29,25 +29,27 @@ public class Scrapper {
                         .toUpperCase())
                 .toList();
 
-        return new DiningHall(parse(data), hallName);
+        return new DiningHall(parse(data, hallName), hallName);
     }
 
-    private static Map<Day, List<TimeRange>> parse(List<String> data) {
+    private static Map<Day, List<TimeRange>> parse(List<String> data, String hallName) {
         Map<Day, List<TimeRange>> schedule = new EnumMap<>(Day.class);
         for (String line : data) {
             String [] parts = line.split(",");
 
-            List<Day> days = parseDays(parts[0].trim());
-            parseAndAddTimeRange(parts[1].trim(), days, schedule);
+            List<Day> days = parseDays(parts[0].trim(), hallName);
+            parseAndAddTimeRange(parts[1].trim(), days, schedule, hallName);
         }
         return schedule;
     }
 
-    private static List<Day> parseDays(String daysString) {
+    private static List<Day> parseDays(String daysString, String hallName) {
+        List<Day> days;
         if (daysString.contains("/")) {
             String [] parts = daysString.split("/");
-            List<Day> days = parseDayRange(parts[0].trim());
+            days = parseDayRange(parts[0].trim());
             days.add(parseOneDay(parts[1].trim()));
+
             return days;
         } else {
             return parseDayRange(daysString);
@@ -56,17 +58,24 @@ public class Scrapper {
 
     private static List<Day> parseDayRange(String dayRangeString) {
         String [] daysRange = dayRangeString.split("-");
-        Day first = Day.valueOf(daysRange[0]);
-        Day last = Day.valueOf(daysRange[1]);
-
-        return List.of(Day.values()).subList(first.ordinal(), last.ordinal() + 1);
+        try {
+            Day first = Day.valueOf(daysRange[0]);
+            Day last = Day.valueOf(daysRange[1]);
+            return new ArrayList<>(List.of(Day.values()).subList(first.ordinal(), last.ordinal() + 1));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid day range string: " + dayRangeString);
+        }
     }
 
     private static Day parseOneDay(String oneDayString) {
-        return Day.valueOf(oneDayString);
+        try {
+            return Day.valueOf(oneDayString);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid one day string: " + oneDayString);
+        }
     }
 
-    private static void parseAndAddTimeRange(String timesString, List<Day> days, Map<Day, List<TimeRange>> schedule) {
+    private static void parseAndAddTimeRange(String timesString, List<Day> days, Map<Day, List<TimeRange>> schedule, String hallName) {
         String [] times = timesString.split(" - ");
         LocalTime open = LocalTime.parse(times[0].trim(), FORMATTER);
         LocalTime close = LocalTime.parse(times[1].trim(), FORMATTER);
@@ -76,6 +85,9 @@ public class Scrapper {
                 TimeRange timeRange = new TimeRange(open, close);
                 schedule.computeIfAbsent(day, key -> new ArrayList<>()).add(timeRange);
             } else {
+                if (hallName.equals("the-howard-dining-hall-at-maseeh")) {
+                    open = open.plusHours(12);
+                }
                 TimeRange timeRangeToday = new TimeRange(open, LocalTime.MAX);
                 TimeRange timeRangeTomorrow = new TimeRange(LocalTime.MIN, close);
                 Day tomorrowDay = Day.values()[(day.ordinal() + 1) % Day.values().length];
